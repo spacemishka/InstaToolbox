@@ -57,4 +57,12 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
+
+//    implementation(libs.mobile.ffmpeg.full)
+  //  implementation("com.google.mlkit:speech-recognition:17.0.0-beta3")
+//    implementation(libs.mobile.ffmpeg.full.gpl)
+//    implementation(libs.ffmpeg.kit.full.gpl)
 }
+// FFmpeg for video processing
+//implementation("com.arthenica:mobile-ffmpeg-full-gpl:4.4.LTS")

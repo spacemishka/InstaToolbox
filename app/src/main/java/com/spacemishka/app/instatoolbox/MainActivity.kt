@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                     permissionLauncher.launch(android.Manifest.permission.READ_MEDIA_IMAGES)
+                    permissionLauncher.launch(android.Manifest.permission.READ_MEDIA_AUDIO)
                 } else {
                     permissionLauncher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
                 }
@@ -96,6 +97,8 @@ fun MainScreen(
             hasPermission = hasPermission,
             onBack = { selectedScreen = null }
         )
+    } else if (selectedScreen == "VideoCaption") {
+        VideoCaptionScreen()
     } else {
         Column(
             modifier = modifier
@@ -131,6 +134,12 @@ fun MainScreen(
                         enabled = true
                     ) {
                         Text("Swipeable Photo Generator")
+                    }
+                    Button(
+                        onClick = { selectedScreen = "VideoCaption" },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Video Captioning")
                     }
                     Button(
                         onClick = { /* TODO: Add next feature */ },
