@@ -42,6 +42,9 @@ fun NoCropImageScreen(
     var paddingPercent by remember { mutableStateOf(20f) }
     var frameColorBlack by remember { mutableStateOf(true) }
     var processedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var expandedPadding by remember { mutableStateOf(false) }
+    
+    val paddingOptions = listOf(2.5f, 5f, 10f, 15f, 20f)
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -81,16 +84,30 @@ fun NoCropImageScreen(
         }
         Spacer(modifier = Modifier.height(16.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Padding: ${paddingPercent.toInt()}%", modifier = Modifier.weight(1f))
-            Slider(
-                value = paddingPercent,
-                onValueChange = {
-                    paddingPercent = it
-                    processedBitmap = null
-                },
-                valueRange = 0f..50f,
-                modifier = Modifier.weight(2f)
-            )
+            Text("Padding:", modifier = Modifier.weight(1f))
+            Box(modifier = Modifier.weight(2f)) {
+                Button(
+                    onClick = { expandedPadding = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("${if (paddingPercent % 1 == 0f) paddingPercent.toInt() else paddingPercent}%")
+                }
+                DropdownMenu(
+                    expanded = expandedPadding,
+                    onDismissRequest = { expandedPadding = false }
+                ) {
+                    paddingOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text("${if (option % 1 == 0f) option.toInt() else option}%") },
+                            onClick = {
+                                paddingPercent = option
+                                expandedPadding = false
+                                processedBitmap = null
+                            }
+                        )
+                    }
+                }
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -131,8 +148,9 @@ fun NoCropImageScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp)
-                        .background(if (frameColorBlack) ComposeColor.Black else ComposeColor.White)
+                        .aspectRatio(1f)
+                        .background(if (frameColorBlack) ComposeColor.Black else ComposeColor.White),
+                    contentAlignment = Alignment.Center
                 ) {
                     Image(
                         bitmap = bmp.asImageBitmap(),
@@ -164,14 +182,24 @@ fun addPaddingToSquare(
     val w = src.width
     val h = src.height
     val longer = maxOf(w, h)
-    val pad = ((longer * paddingPercent) / 2).toInt()
-    val finalSize = longer + pad * 2
+    // paddingPercent is the TOTAL percentage for both sides combined
+    // So 10% padding means 5% on each side
+    // The image should occupy (100% - paddingPercent) of the canvas
+    val imageContentPercent = 1 - paddingPercent
+    val finalSize = (longer / imageContentPercent).toInt()
+    
+    // Calculate the scaled dimensions to fit in the content area
+    val scaledW = (w * imageContentPercent).toInt()
+    val scaledH = (h * imageContentPercent).toInt()
+    
     val result = Bitmap.createBitmap(finalSize, finalSize, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(result)
     canvas.drawColor(frameColor)
-    val left = (finalSize - w) / 2
-    val top = (finalSize - h) / 2
-    canvas.drawBitmap(src, left.toFloat(), top.toFloat(), null)
+    val left = (finalSize - scaledW) / 2
+    val top = (finalSize - scaledH) / 2
+    
+    val scaledBitmap = Bitmap.createScaledBitmap(src, scaledW, scaledH, true)
+    canvas.drawBitmap(scaledBitmap, left.toFloat(), top.toFloat(), null)
     return result
 }
 
