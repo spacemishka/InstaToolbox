@@ -60,7 +60,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
 
 //    implementation(libs.mobile.ffmpeg.full)
-  //  implementation("com.google.mlkit:speech-recognition:17.0.0-beta3")
+  //      implementation("com.google.mlkit:speech-recognition:17.0.0-beta3")
+    implementation("androidx.compose.material:material-icons-extended:1.7.1")
+    // Using Android's built-in SpeechRecognizer instead of external libraries
 //    implementation(libs.mobile.ffmpeg.full.gpl)
 //    implementation(libs.ffmpeg.kit.full.gpl)
 }
