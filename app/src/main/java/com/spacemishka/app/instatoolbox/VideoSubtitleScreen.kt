@@ -78,6 +78,7 @@ fun VideoSubtitleScreen(
 
     // Live Video Player Position Tracking
     var videoViewRef by remember { mutableStateOf<android.widget.VideoView?>(null) }
+    var fullScreenVideoViewRef by remember { mutableStateOf<android.widget.VideoView?>(null) }
     var currentPlaybackPosition by remember { mutableStateOf(0L) }
 
     // Custom Typography Presets
@@ -156,11 +157,13 @@ fun VideoSubtitleScreen(
     }
 
     // Polling Coroutine to update Video Playback position
-    LaunchedEffect(videoUri, subtitles) {
+    // Reads from whichever player is currently active (small or fullscreen)
+    LaunchedEffect(videoUri, subtitles, isPlaying, showFullScreenPreview) {
         if (videoUri != null) {
             while (true) {
-                delay(100)
-                videoViewRef?.let {
+                delay(50)
+                val activeRef = if (showFullScreenPreview) fullScreenVideoViewRef else videoViewRef
+                activeRef?.let {
                     if (it.isPlaying) {
                         currentPlaybackPosition = it.currentPosition.toLong()
                     }
@@ -169,14 +172,15 @@ fun VideoSubtitleScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ObsidianBlack)
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Top
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(ObsidianBlack)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Top
+        ) {
         // App Bar
         Row(
             modifier = Modifier
@@ -269,28 +273,45 @@ fun VideoSubtitleScreen(
                         .height(200.dp)
                         .background(ComposeColor.Black)
                 ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            android.widget.VideoView(ctx).apply {
-                                setOnPreparedListener {
-                                    it.isLooping = false
-                                    isPlaying = false
+                    if (!showFullScreenPreview) {
+                        AndroidView(
+                            factory = { ctx ->
+                                android.widget.VideoView(ctx).apply {
+                                    setOnPreparedListener {
+                                        it.isLooping = false
+                                        seekTo(currentPlaybackPosition.toInt())
+                                        if (isPlaying) {
+                                            start()
+                                        }
+                                    }
+                                    setOnCompletionListener {
+                                        isPlaying = false
+                                    }
+                                    videoViewRef = this
                                 }
-                                videoViewRef = this
-                            }
-                        },
-                        update = { view ->
-                            view.setVideoURI(videoUri)
-                            videoViewRef = view
-                        },
-                        onRelease = { view ->
-                            view.stopPlayback()
-                            if (videoViewRef == view) {
-                                videoViewRef = null
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                            },
+                            update = { view ->
+                                val currentUri = view.tag as? Uri
+                                if (currentUri != videoUri) {
+                                    view.tag = videoUri
+                                    view.setVideoURI(videoUri)
+                                }
+                                videoViewRef = view
+                            },
+                            onRelease = { view ->
+                                // Only stop if we are NOT transitioning to fullscreen
+                                // (when going fullscreen the view is removed but we want
+                                // the fullscreen player to pick up from currentPlaybackPosition)
+                                if (!showFullScreenPreview) {
+                                    view.stopPlayback()
+                                }
+                                if (videoViewRef == view) {
+                                    videoViewRef = null
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
 
                     // Play/Pause Action Clickable Overlay
                     Box(
@@ -1251,209 +1272,173 @@ fun VideoSubtitleScreen(
                 }
             }
         }
-    }
 
-    if (showFullScreenPreview && videoUri != null) {
-        Dialog(
-            onDismissRequest = { showFullScreenPreview = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            var fullPlaybackPosition by remember { mutableStateOf(0L) }
-            var isFullPlaying by remember { mutableStateOf(false) }
-            var fullVideoViewRef by remember { mutableStateOf<android.widget.VideoView?>(null) }
-
-            // Polling effect for full screen playback position tracking
-            LaunchedEffect(isFullPlaying) {
-                while (isFullPlaying) {
-                    fullVideoViewRef?.let {
-                        fullPlaybackPosition = it.currentPosition.toLong()
-                    }
-                    delay(50L)
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(ComposeColor.Black)
-            ) {
-                AndroidView(
-                    factory = { ctx ->
-                        android.widget.VideoView(ctx).apply {
-                            setOnPreparedListener {
-                                it.isLooping = false
-                                start()
-                                isFullPlaying = true
-                            }
-                            fullVideoViewRef = this
-                        }
-                    },
-                    update = { view ->
-                        view.setVideoURI(videoUri)
-                        fullVideoViewRef = view
-                    },
-                    onRelease = { view ->
-                        view.stopPlayback()
-                        if (fullVideoViewRef == view) {
-                            fullVideoViewRef = null
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
+        if (showFullScreenPreview && videoUri != null) {
+            Dialog(
+                onDismissRequest = { showFullScreenPreview = false },
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false
                 )
-
-                // Subtitle Overlay
-                val activeSub = subtitles.find { fullPlaybackPosition in it.startTime..it.endTime }
-                activeSub?.let { sub ->
-                    val isCreator = selectedFontStylePreset == "Submagic Pro" || selectedFontStylePreset == "TikTok Viral" || selectedFontStylePreset == "Caption Glow"
-                    val words = sub.text.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-                    val totalDuration = sub.endTime - sub.startTime
-                    val elapsed = fullPlaybackPosition - sub.startTime
-                    val wordDuration = if (totalDuration > 0) totalDuration.toFloat() / words.size else 0f
-                    val activeIndex = if (wordDuration > 0f) {
-                        (elapsed / wordDuration).toInt().coerceIn(0, words.size - 1)
-                    } else {
-                        0
-                    }
-
-                    val annotatedText = buildAnnotatedString {
-                        words.forEachIndexed { idx, word ->
-                            val wordToAppend = if (isCreator) word.uppercase(java.util.Locale.US) else word
-                            if (idx == activeIndex && isCreator) {
-                                val highlightColor = when (selectedFontStylePreset) {
-                                    "Submagic Pro" -> ComposeColor.Green
-                                    "TikTok Viral" -> CreatorSunsetPink
-                                    "Caption Glow" -> ComposeColor.Yellow
-                                    else -> ComposeColor.Yellow
-                                }
-                                withStyle(
-                                    style = SpanStyle(
-                                        color = highlightColor,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                ) {
-                                    append(wordToAppend)
-                                }
-                            } else {
-                                append(wordToAppend)
-                            }
-                            if (idx < words.size - 1) {
-                                append(" ")
-                            }
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .padding(top = (LocalConfiguration.current.screenHeightDp.dp * subtitleYOffset) - 20.dp)
-                            .background(
-                                color = if (selectedFontStylePreset == "Bold Impact") ComposeColor.Black.copy(alpha = 0.8f) else ComposeColor.Transparent,
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .padding(horizontal = 24.dp, vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = annotatedText,
-                            color = when (selectedFontStylePreset) {
-                                "Neon Glow" -> AccentCyan
-                                "Retro Sunset" -> CreatorSunsetYellow
-                                "TikTok Viral" -> ComposeColor.Yellow
-                                else -> selectedFontColor
-                            },
-                            fontSize = fontSize.sp,
-                            fontWeight = if (selectedFontStylePreset == "Plain") FontWeight.Normal else FontWeight.Bold,
-                            fontStyle = if (selectedFontStylePreset == "Neon Glow" || selectedFontStylePreset == "Submagic Pro" || selectedFontStylePreset == "TikTok Viral") androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
-                            fontFamily = when (selectedFontStylePreset) {
-                                "Retro Sunset" -> androidx.compose.ui.text.font.FontFamily.Monospace
-                                else -> androidx.compose.ui.text.font.FontFamily.Default
-                            },
-                            style = androidx.compose.ui.text.TextStyle(
-                                shadow = when (selectedFontStylePreset) {
-                                    "Neon Glow" -> {
-                                        androidx.compose.ui.graphics.Shadow(
-                                            color = AccentCyan,
-                                            offset = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                            blurRadius = 12f
-                                        )
-                                    }
-                                    "Caption Glow" -> {
-                                        androidx.compose.ui.graphics.Shadow(
-                                            color = CreatorSunsetPink,
-                                            offset = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                            blurRadius = 16f
-                                        )
-                                    }
-                                    "Submagic Pro", "TikTok Viral" -> {
-                                        androidx.compose.ui.graphics.Shadow(
-                                            color = ComposeColor.Black,
-                                            offset = androidx.compose.ui.geometry.Offset(2f, 2f),
-                                            blurRadius = 1f
-                                        )
-                                    }
-                                    else -> {
-                                        androidx.compose.ui.graphics.Shadow(
-                                            color = ComposeColor.Black,
-                                            offset = androidx.compose.ui.geometry.Offset(2f, 2f),
-                                            blurRadius = 4f
-                                        )
-                                    }
-                                }
-                            ),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-
-                // Play/Pause Action Clickable Overlay
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clickable {
-                            fullVideoViewRef?.let {
-                                if (it.isPlaying) {
-                                    it.pause()
-                                    isFullPlaying = false
-                                } else {
-                                    it.start()
-                                    isFullPlaying = true
+                        .background(ComposeColor.Black)
+                ) {
+                    // Layer 1: Video player
+                    AndroidView(
+                        factory = { ctx ->
+                            android.widget.VideoView(ctx).apply {
+                                setOnPreparedListener {
+                                    it.isLooping = false
+                                    seekTo(currentPlaybackPosition.toInt())
+                                    start()
+                                    isPlaying = true
                                 }
+                                setOnCompletionListener {
+                                    isPlaying = false
+                                }
+                                fullScreenVideoViewRef = this
+                            }
+                        },
+                        update = { view ->
+                            val currentUri = view.tag as? Uri
+                            if (currentUri != videoUri) {
+                                view.tag = videoUri
+                                view.setVideoURI(videoUri)
+                            }
+                            fullScreenVideoViewRef = view
+                        },
+                        onRelease = { view ->
+                            currentPlaybackPosition = view.currentPosition.toLong()
+                            view.stopPlayback()
+                            if (fullScreenVideoViewRef == view) {
+                                fullScreenVideoViewRef = null
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    // Layer 2: Subtitle overlay
+                    val activeSub = subtitles.find { currentPlaybackPosition in it.startTime..it.endTime }
+                    activeSub?.let { sub ->
+                        val isCreator = selectedFontStylePreset == "Submagic Pro" ||
+                            selectedFontStylePreset == "TikTok Viral" ||
+                            selectedFontStylePreset == "Caption Glow"
+                        val words = sub.text.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+                        val totalDuration = sub.endTime - sub.startTime
+                        val elapsed = currentPlaybackPosition - sub.startTime
+                        val wordDuration = if (totalDuration > 0) totalDuration.toFloat() / words.size else 0f
+                        val activeIndex = if (wordDuration > 0f)
+                            (elapsed / wordDuration).toInt().coerceIn(0, words.size - 1)
+                        else 0
+
+                        val annotatedText = buildAnnotatedString {
+                            words.forEachIndexed { idx, word ->
+                                val w = if (isCreator) word.uppercase(java.util.Locale.US) else word
+                                if (idx == activeIndex && isCreator) {
+                                    val hi = when (selectedFontStylePreset) {
+                                        "Submagic Pro" -> ComposeColor.Green
+                                        "TikTok Viral" -> CreatorSunsetPink
+                                        else -> ComposeColor.Yellow
+                                    }
+                                    withStyle(SpanStyle(color = hi, fontWeight = FontWeight.Bold)) { append(w) }
+                                } else append(w)
+                                if (idx < words.size - 1) append(" ")
                             }
                         }
-                )
 
-                if (!isFullPlaying) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .fillMaxWidth()
+                                .padding(top = (LocalConfiguration.current.screenHeightDp.dp * subtitleYOffset))
+                                .background(
+                                    color = if (selectedFontStylePreset == "Bold Impact")
+                                        ComposeColor.Black.copy(alpha = 0.8f) else ComposeColor.Transparent,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .padding(horizontal = 24.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = annotatedText,
+                                color = when (selectedFontStylePreset) {
+                                    "Neon Glow" -> AccentCyan
+                                    "Retro Sunset" -> CreatorSunsetYellow
+                                    "TikTok Viral" -> ComposeColor.Yellow
+                                    else -> selectedFontColor
+                                },
+                                fontSize = fontSize.sp,
+                                fontWeight = if (selectedFontStylePreset == "Plain") FontWeight.Normal else FontWeight.Bold,
+                                fontStyle = if (selectedFontStylePreset in listOf("Neon Glow", "Submagic Pro", "TikTok Viral"))
+                                    androidx.compose.ui.text.font.FontStyle.Italic
+                                else androidx.compose.ui.text.font.FontStyle.Normal,
+                                fontFamily = if (selectedFontStylePreset == "Retro Sunset")
+                                    androidx.compose.ui.text.font.FontFamily.Monospace
+                                else androidx.compose.ui.text.font.FontFamily.Default,
+                                style = androidx.compose.ui.text.TextStyle(
+                                    shadow = when (selectedFontStylePreset) {
+                                        "Neon Glow" -> androidx.compose.ui.graphics.Shadow(AccentCyan, androidx.compose.ui.geometry.Offset(0f, 0f), 12f)
+                                        "Caption Glow" -> androidx.compose.ui.graphics.Shadow(CreatorSunsetPink, androidx.compose.ui.geometry.Offset(0f, 0f), 16f)
+                                        "Submagic Pro", "TikTok Viral" -> androidx.compose.ui.graphics.Shadow(ComposeColor.Black, androidx.compose.ui.geometry.Offset(2f, 2f), 1f)
+                                        else -> androidx.compose.ui.graphics.Shadow(ComposeColor.Black, androidx.compose.ui.geometry.Offset(2f, 2f), 4f)
+                                    }
+                                ),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    // Layer 3: Tap-to-play/pause overlay with centered play icon
                     Box(
                         modifier = Modifier
-                            .align(Alignment.Center)
-                            .background(ComposeColor.Black.copy(alpha = 0.5f), CircleShape)
-                            .padding(16.dp)
+                            .fillMaxSize()
+                            .clickable {
+                                fullScreenVideoViewRef?.let {
+                                    if (it.isPlaying) { it.pause(); isPlaying = false }
+                                    else { it.start(); isPlaying = true }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!isPlaying) {
+                            Box(
+                                modifier = Modifier
+                                    .background(ComposeColor.Black.copy(alpha = 0.55f), CircleShape)
+                                    .padding(20.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Play",
+                                    tint = ComposeColor.White,
+                                    modifier = Modifier.size(56.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Layer 4: Close button — top-left, always on top
+                    IconButton(
+                        onClick = { showFullScreenPreview = false },
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .statusBarsPadding()
+                            .padding(12.dp)
+                            .background(ComposeColor.Black.copy(alpha = 0.6f), CircleShape)
+                            .size(48.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play",
-                            tint = ComposeColor.White,
-                            modifier = Modifier.size(48.dp)
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close Preview",
+                            tint = ComposeColor.White
                         )
                     }
-                }
-
-                // Close Button
-                IconButton(
-                    onClick = { showFullScreenPreview = false },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(24.dp)
-                        .background(ComposeColor.Black.copy(alpha = 0.5f), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Preview",
-                        tint = ComposeColor.White
-                    )
                 }
             }
         }
     }
+}
 }

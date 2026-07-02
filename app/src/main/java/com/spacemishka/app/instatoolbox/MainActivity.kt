@@ -171,6 +171,12 @@ fun MainScreen(
             hasPermission = hasPermission,
             onBack = { selectedScreen = null }
         )
+    } else if (selectedScreen == "NineGrid") {
+        NineGridProfileSlicerScreen(
+            modifier = modifier.background(ObsidianBlack),
+            hasPermission = hasPermission,
+            onBack = { selectedScreen = null }
+        )
     } else {
         Column(
             modifier = modifier
@@ -233,9 +239,9 @@ fun MainScreen(
                 title = "9-Grid Profile Slicer",
                 subtitle = "Divide photos into a grid of 9 segments for layout profile displays.",
                 icon = Icons.Default.GridOn,
-                gradientColors = listOf(TextMuted, TextMuted),
-                onClick = {},
-                enabled = false
+                gradientColors = listOf(CreatorSunsetOrange, CreatorSunsetPink),
+                onClick = { selectedScreen = "NineGrid" },
+                enabled = true
             )
 
             CreatorToolCard(
