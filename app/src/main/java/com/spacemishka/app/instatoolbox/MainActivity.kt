@@ -33,8 +33,17 @@ import androidx.compose.material.icons.filled.Movie
 import com.spacemishka.app.instatoolbox.ui.theme.*
 
 class MainActivity : ComponentActivity() {
+    private val incomingIntentState = mutableStateOf<android.content.Intent?>(null)
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        incomingIntentState.value = intent
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        incomingIntentState.value = intent
         enableEdgeToEdge()
         setContent {
             val context = LocalContext.current
@@ -97,7 +106,9 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding),
                         hasPermission = hasPermission,
                         permissionLauncher = permissionLauncher,
-                        permissionsToRequest = permissionsToRequest
+                        permissionsToRequest = permissionsToRequest,
+                        incomingIntent = incomingIntentState.value,
+                        onIntentHandled = { incomingIntentState.value = null }
                     )
                 }
             }
@@ -119,9 +130,123 @@ fun MainScreen(
     modifier: Modifier = Modifier,
     hasPermission: Boolean,
     permissionLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
-    permissionsToRequest: Array<String>
+    permissionsToRequest: Array<String>,
+    incomingIntent: android.content.Intent?,
+    onIntentHandled: () -> Unit
 ) {
     var selectedScreen by remember { mutableStateOf<String?>(null) }
+    var sharedUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var showShareDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(incomingIntent) {
+        val intent = incomingIntent ?: return@LaunchedEffect
+        if (intent.action == android.content.Intent.ACTION_SEND) {
+            val type = intent.type ?: ""
+            val uri = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM) as? android.net.Uri
+            }
+            if (uri != null) {
+                sharedUri = uri
+                if (type.startsWith("video/")) {
+                    selectedScreen = "VideoSubtitle"
+                    onIntentHandled()
+                } else if (type.startsWith("image/")) {
+                    showShareDialog = true
+                }
+            } else {
+                onIntentHandled()
+            }
+        }
+    }
+
+    if (showShareDialog && sharedUri != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showShareDialog = false
+                sharedUri = null
+                onIntentHandled()
+            },
+            title = {
+                Text(
+                    text = "Choose a Creator Tool",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "What would you like to create with this shared photo?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    ShareOptionItem(
+                        title = "No-Crop Post Maker",
+                        subtitle = "Fit into square with background frames",
+                        gradientColors = listOf(CreatorSunsetPink, CreatorSunsetPurple),
+                        onClick = {
+                            selectedScreen = "NoCrop"
+                            showShareDialog = false
+                            onIntentHandled()
+                        }
+                    )
+
+                    ShareOptionItem(
+                        title = "Swipeable Carousel Slicer",
+                        subtitle = "Split into seamless swipeable cards",
+                        gradientColors = listOf(CreatorSunsetPurple, CreatorSunsetOrange),
+                        onClick = {
+                            selectedScreen = "Swipeable"
+                            showShareDialog = false
+                            onIntentHandled()
+                        }
+                    )
+
+                    ShareOptionItem(
+                        title = "9-Grid Profile Slicer",
+                        subtitle = "Slice into a 3x3 layout puzzle grid",
+                        gradientColors = listOf(CreatorSunsetOrange, CreatorSunsetPink),
+                        onClick = {
+                            selectedScreen = "NineGrid"
+                            showShareDialog = false
+                            onIntentHandled()
+                        }
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                Button(
+                    onClick = {
+                        showShareDialog = false
+                        sharedUri = null
+                        onIntentHandled()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = ObsidianBlack),
+                    border = BorderStroke(1.dp, CardBorder),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Cancel", color = TextPrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = GlassySurface,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
 
     if (!hasPermission) {
         Column(
@@ -157,25 +282,41 @@ fun MainScreen(
         NoCropImageScreen(
             modifier = modifier.background(ObsidianBlack),
             hasPermission = hasPermission,
-            onBack = { selectedScreen = null }
+            initialUri = sharedUri,
+            onBack = { 
+                selectedScreen = null
+                sharedUri = null
+            }
         )
     } else if (selectedScreen == "Swipeable") {
         SwipeablePhotoGeneratorScreen(
             modifier = modifier.background(ObsidianBlack),
             hasPermission = hasPermission,
-            onBack = { selectedScreen = null }
+            initialUri = sharedUri,
+            onBack = { 
+                selectedScreen = null
+                sharedUri = null
+            }
         )
     } else if (selectedScreen == "VideoSubtitle") {
         VideoSubtitleScreen(
             modifier = modifier.background(ObsidianBlack),
             hasPermission = hasPermission,
-            onBack = { selectedScreen = null }
+            initialUri = sharedUri,
+            onBack = { 
+                selectedScreen = null
+                sharedUri = null
+            }
         )
     } else if (selectedScreen == "NineGrid") {
         NineGridProfileSlicerScreen(
             modifier = modifier.background(ObsidianBlack),
             hasPermission = hasPermission,
-            onBack = { selectedScreen = null }
+            initialUri = sharedUri,
+            onBack = { 
+                selectedScreen = null
+                sharedUri = null
+            }
         )
     } else {
         Column(
@@ -338,6 +479,50 @@ fun CreatorToolCard(
                     contentDescription = null,
                     tint = TextMuted,
                     modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ShareOptionItem(
+    title: String,
+    subtitle: String,
+    gradientColors: List<ComposeColor>,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = ObsidianBlack),
+        border = BorderStroke(1.dp, CardBorder)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(
+                        brush = Brush.linearGradient(gradientColors),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
                 )
             }
         }

@@ -56,11 +56,12 @@ import com.spacemishka.app.instatoolbox.ui.theme.*
 fun VideoSubtitleScreen(
     modifier: Modifier = Modifier,
     hasPermission: Boolean = true,
+    initialUri: Uri? = null,
     onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var videoUri by remember { mutableStateOf<Uri?>(null) }
+    var videoUri by remember { mutableStateOf<Uri?>(initialUri) }
     var subtitleText by remember { mutableStateOf(TextFieldValue("")) }
     var fontSize by remember { mutableStateOf(48f) }
     var subtitleYOffset by remember { mutableStateOf(0.85f) }

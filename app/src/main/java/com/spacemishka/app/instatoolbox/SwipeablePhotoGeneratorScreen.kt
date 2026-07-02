@@ -49,9 +49,10 @@ import com.spacemishka.app.instatoolbox.ui.theme.*
 fun SwipeablePhotoGeneratorScreen(
     modifier: Modifier = Modifier,
     hasPermission: Boolean,
+    initialUri: Uri? = null,
     onBack: () -> Unit
 ) {
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var imageUri by remember { mutableStateOf<Uri?>(initialUri) }
     var segmentCount by remember { mutableStateOf(3) }
     var segments by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
     var sourceBitmap by remember { mutableStateOf<Bitmap?>(null) }

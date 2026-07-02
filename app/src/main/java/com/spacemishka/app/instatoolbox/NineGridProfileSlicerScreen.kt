@@ -48,9 +48,10 @@ import com.spacemishka.app.instatoolbox.ui.theme.*
 fun NineGridProfileSlicerScreen(
     modifier: Modifier = Modifier,
     hasPermission: Boolean,
+    initialUri: Uri? = null,
     onBack: () -> Unit
 ) {
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var imageUri by remember { mutableStateOf<Uri?>(initialUri) }
     var sliceMode by remember { mutableStateOf("Center Crop") } // "Center Crop", "Fit Padding"
     var padColorBlack by remember { mutableStateOf(true) }
     var paddingPercent by remember { mutableStateOf(0f) }

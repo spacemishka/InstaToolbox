@@ -51,11 +51,12 @@ import com.spacemishka.app.instatoolbox.ui.theme.*
 fun NoCropImageScreen(
     modifier: Modifier = Modifier,
     hasPermission: Boolean,
+    initialUri: Uri? = null,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var imageUri by remember { mutableStateOf<Uri?>(initialUri) }
     var paddingPercent by remember { mutableStateOf(10f) }
     var frameColorBlack by remember { mutableStateOf(true) }
     var sourceBitmap by remember { mutableStateOf<Bitmap?>(null) }
