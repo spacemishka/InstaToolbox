@@ -62,6 +62,8 @@ fun NoCropImageScreen(
     var processedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     
     val paddingOptions = listOf(0f, 2.5f, 5f, 10f, 15f, 20f)
+    val outputSizePresets = listOf("Original", "Instagram (1080px)", "Full HD (1920px)", "4K UHD (3840px)")
+    var outputSizePreset by remember { mutableStateOf("Original") }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -357,7 +359,54 @@ fun NoCropImageScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "${option.toInt()}%",
+                                        text = if (option % 1f == 0f) "${option.toInt()}%" else "${option}%",
+                                        color = if (selected) ComposeColor.White else TextSecondary,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Output Size Presets
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Output Size (Square)",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            outputSizePresets.forEach { preset ->
+                                val selected = outputSizePreset == preset
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            color = if (selected) CreatorSunsetPink else ObsidianBlack,
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (selected) CreatorSunsetPink else CardBorder,
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable {
+                                            outputSizePreset = preset
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = preset,
                                         color = if (selected) ComposeColor.White else TextSecondary,
                                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                         fontSize = 13.sp
@@ -390,14 +439,21 @@ fun NoCropImageScreen(
                 }
 
                 // Sunset Gradient Save Button
-                Button(
+                 Button(
                     onClick = {
                         coroutineScope.launch {
                             var saved = false
                             withContext(Dispatchers.IO) {
+                                val targetSize = when (outputSizePreset) {
+                                    "Instagram (1080px)" -> 1080
+                                    "Full HD (1920px)" -> 1920
+                                    "4K UHD (3840px)" -> 3840
+                                    else -> null
+                                }
                                 val loader = context.imageLoader
                                 val request = ImageRequest.Builder(context)
                                     .data(imageUri)
+                                    .size(coil.size.Size.ORIGINAL)
                                     .allowHardware(false)
                                     .build()
                                 val result = loader.execute(request)
@@ -408,7 +464,8 @@ fun NoCropImageScreen(
                                         val fullPadded = addPaddingToSquare(
                                             it,
                                             paddingPercent / 100f,
-                                            padColor
+                                            padColor,
+                                            targetSize
                                         )
                                         saved = saveBitmapToGallery(context, fullPadded)
                                         fullPadded.recycle()
@@ -437,16 +494,23 @@ fun NoCropImageScreen(
 fun addPaddingToSquare(
     src: Bitmap,
     paddingPercent: Float,
-    frameColor: Int
+    frameColor: Int,
+    targetSize: Int? = null
 ): Bitmap {
     val w = src.width
     val h = src.height
     val longer = maxOf(w, h)
     val imageContentPercent = 1 - paddingPercent
-    val finalSize = (longer / imageContentPercent).toInt()
     
-    val scaledW = (w * imageContentPercent).toInt()
-    val scaledH = (h * imageContentPercent).toInt()
+    // Safely limit max canvas size to prevent OutOfMemory
+    val rawFinalSize = (longer / imageContentPercent).toInt()
+    val finalSize = targetSize ?: if (rawFinalSize > 8192) 8192 else rawFinalSize
+    
+    val maxContentSize = (finalSize * imageContentPercent).toInt()
+    val scale = maxContentSize.toFloat() / longer
+    
+    val scaledW = (w * scale).toInt()
+    val scaledH = (h * scale).toInt()
     
     val result = Bitmap.createBitmap(finalSize, finalSize, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(result)

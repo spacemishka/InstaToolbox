@@ -31,10 +31,14 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Delete
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,6 +57,7 @@ fun VideoSubtitleScreen(
     var videoUri by remember { mutableStateOf<Uri?>(null) }
     var subtitleText by remember { mutableStateOf(TextFieldValue("")) }
     var fontSize by remember { mutableStateOf(48f) }
+    var subtitleYOffset by remember { mutableStateOf(0.85f) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var exportStatus by remember { mutableStateOf<String?>(null) }
     var subtitles by remember { mutableStateOf<List<VideoSubtitler.Subtitle>>(emptyList()) }
@@ -68,7 +73,7 @@ fun VideoSubtitleScreen(
     var currentPlaybackPosition by remember { mutableStateOf(0L) }
 
     // Custom Typography Presets
-    val fontStylePresets = listOf("Plain", "Neon Glow", "Retro Sunset", "Bold Impact")
+    val fontStylePresets = listOf("Plain", "Neon Glow", "Retro Sunset", "Bold Impact", "Submagic Pro", "TikTok Viral", "Caption Glow")
     var selectedFontStylePreset by remember { mutableStateOf("Plain") }
 
     val fontColors = listOf(ComposeColor.White, ComposeColor.Yellow, AccentCyan, CreatorSunsetPink, ComposeColor.Green)
@@ -115,6 +120,7 @@ fun VideoSubtitleScreen(
                     fontStyle = selectedFontStylePreset,
                     fontSize = fontSize,
                     fontColor = selectedFontColor.toArgb(),
+                    yOffset = subtitleYOffset,
                     outputUri = uri
                 )
                 exportStatus = if (result) "Video exported successfully with embedded subtitles!" else "Export failed"
@@ -278,10 +284,48 @@ fun VideoSubtitleScreen(
                     // Dynamic Subtitle overlay directly on top of video player!
                     val activeSubtitle = subtitles.find { currentPlaybackPosition in it.startTime..it.endTime }
                     activeSubtitle?.let { sub ->
+                        val isCreator = selectedFontStylePreset == "Submagic Pro" || selectedFontStylePreset == "TikTok Viral" || selectedFontStylePreset == "Caption Glow"
+                        val words = sub.text.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+                        val totalDuration = sub.endTime - sub.startTime
+                        val elapsed = currentPlaybackPosition - sub.startTime
+                        val wordDuration = if (totalDuration > 0) totalDuration.toFloat() / words.size else 0f
+                        val activeIndex = if (wordDuration > 0f) {
+                            (elapsed / wordDuration).toInt().coerceIn(0, words.size - 1)
+                        } else {
+                            0
+                        }
+
+                        val annotatedText = buildAnnotatedString {
+                            words.forEachIndexed { idx, word ->
+                                val wordToAppend = if (isCreator) word.uppercase(java.util.Locale.US) else word
+                                if (idx == activeIndex && isCreator) {
+                                    val highlightColor = when (selectedFontStylePreset) {
+                                        "Submagic Pro" -> ComposeColor.Green
+                                        "TikTok Viral" -> CreatorSunsetPink
+                                        "Caption Glow" -> ComposeColor.Yellow
+                                        else -> ComposeColor.Yellow
+                                    }
+                                    withStyle(
+                                        style = SpanStyle(
+                                            color = highlightColor,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    ) {
+                                        append(wordToAppend)
+                                    }
+                                } else {
+                                    append(wordToAppend)
+                                }
+                                if (idx < words.size - 1) {
+                                    append(" ")
+                                }
+                            }
+                        }
+
                         Box(
                             modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 20.dp)
+                                .align(Alignment.TopCenter)
+                                .padding(top = maxOf(0.dp, (200.dp * subtitleYOffset) - 15.dp))
                                 .background(
                                     color = if (selectedFontStylePreset == "Bold Impact") ComposeColor.Black.copy(alpha = 0.8f) else ComposeColor.Transparent,
                                     shape = RoundedCornerShape(6.dp)
@@ -289,32 +333,50 @@ fun VideoSubtitleScreen(
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = sub.text,
+                                text = annotatedText,
                                 color = when (selectedFontStylePreset) {
                                     "Neon Glow" -> AccentCyan
                                     "Retro Sunset" -> CreatorSunsetYellow
+                                    "TikTok Viral" -> ComposeColor.Yellow
                                     else -> selectedFontColor
                                 },
                                 fontSize = (fontSize / 2.5f).sp, // Scale down to fit video view frame cleanly
                                 fontWeight = if (selectedFontStylePreset == "Plain") FontWeight.Normal else FontWeight.Bold,
-                                fontStyle = if (selectedFontStylePreset == "Neon Glow") androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
+                                fontStyle = if (selectedFontStylePreset == "Neon Glow" || selectedFontStylePreset == "Submagic Pro" || selectedFontStylePreset == "TikTok Viral") androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
                                 fontFamily = when (selectedFontStylePreset) {
                                     "Retro Sunset" -> androidx.compose.ui.text.font.FontFamily.Monospace
                                     else -> androidx.compose.ui.text.font.FontFamily.Default
                                 },
                                 style = androidx.compose.ui.text.TextStyle(
-                                    shadow = if (selectedFontStylePreset == "Neon Glow") {
-                                        androidx.compose.ui.graphics.Shadow(
-                                            color = AccentCyan,
-                                            offset = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                            blurRadius = 12f
-                                        )
-                                    } else {
-                                        androidx.compose.ui.graphics.Shadow(
-                                            color = ComposeColor.Black,
-                                            offset = androidx.compose.ui.geometry.Offset(2f, 2f),
-                                            blurRadius = 4f
-                                        )
+                                    shadow = when (selectedFontStylePreset) {
+                                        "Neon Glow" -> {
+                                            androidx.compose.ui.graphics.Shadow(
+                                                color = AccentCyan,
+                                                offset = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                                blurRadius = 12f
+                                            )
+                                        }
+                                        "Caption Glow" -> {
+                                            androidx.compose.ui.graphics.Shadow(
+                                                color = CreatorSunsetPink,
+                                                offset = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                                blurRadius = 16f
+                                            )
+                                        }
+                                        "Submagic Pro", "TikTok Viral" -> {
+                                            androidx.compose.ui.graphics.Shadow(
+                                                color = ComposeColor.Black,
+                                                offset = androidx.compose.ui.geometry.Offset(2f, 2f),
+                                                blurRadius = 1f
+                                            )
+                                        }
+                                        else -> {
+                                            androidx.compose.ui.graphics.Shadow(
+                                                color = ComposeColor.Black,
+                                                offset = androidx.compose.ui.geometry.Offset(2f, 2f),
+                                                blurRadius = 4f
+                                            )
+                                        }
                                     }
                                 ),
                                 textAlign = TextAlign.Center
@@ -639,13 +701,38 @@ fun VideoSubtitleScreen(
                     border = BorderStroke(1.dp, CardBorder)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Speech Timeline (Click to Edit):", 
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Speech Timeline (Click to Edit):", 
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Button(
+                                onClick = {
+                                    val lastEnd = subtitles.lastOrNull()?.endTime ?: 0L
+                                    val newSub = VideoSubtitler.Subtitle(
+                                        startTime = lastEnd + 100L,
+                                        endTime = lastEnd + 1600L,
+                                        text = "NEW CAPTION"
+                                    )
+                                    subtitles = subtitles + newSub
+                                    selectedSubtitleIndex = subtitles.size - 1
+                                    subtitleText = TextFieldValue("NEW CAPTION")
+                                    previewBitmap = null
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ObsidianBlack),
+                                border = BorderStroke(1.dp, CardBorder),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("+ Add Block", fontSize = 11.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
+                            }
+                        }
                         Column(
                             modifier = Modifier
                                 .heightIn(max = 160.dp)
@@ -830,21 +917,44 @@ fun VideoSubtitleScreen(
                                     }
                                 }
                             }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    subtitles = subtitles.filterIndexed { idx, _ -> idx != index }
+                                    selectedSubtitleIndex = null
+                                    previewBitmap = null
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ComposeColor.Red.copy(alpha = 0.15f)),
+                                border = BorderStroke(1.dp, ComposeColor.Red.copy(alpha = 0.4f)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete Block",
+                                    tint = ComposeColor.Red,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Delete Caption Block", color = ComposeColor.Red, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
 
                     // Font Style Presets Chips
                     Column {
                         Text("Style Preset", fontSize = 12.sp, color = TextSecondary, modifier = Modifier.padding(bottom = 8.dp))
-                        Row(
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             fontStylePresets.forEach { preset ->
                                 val selected = selectedFontStylePreset == preset
                                 Box(
                                     modifier = Modifier
-                                        .weight(1f)
                                         .background(
                                             color = if (selected) CreatorSunsetPink else ObsidianBlack,
                                             shape = RoundedCornerShape(8.dp)
@@ -858,7 +968,7 @@ fun VideoSubtitleScreen(
                                             selectedFontStylePreset = preset
                                             previewBitmap = null
                                         }
-                                        .padding(vertical = 8.dp),
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -926,20 +1036,51 @@ fun VideoSubtitleScreen(
                         )
                     }
 
+                    // Subtitle Y-Offset (Vertical Position) Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Vertical Position", style = MaterialTheme.typography.bodyMedium, color = TextPrimary, modifier = Modifier.weight(1f))
+                        Slider(
+                            value = subtitleYOffset,
+                            onValueChange = { subtitleYOffset = it },
+                            valueRange = 0.1f..0.9f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = CreatorSunsetPink,
+                                activeTrackColor = CreatorSunsetPink,
+                                inactiveTrackColor = CardBorder
+                            ),
+                            modifier = Modifier.width(180.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${(subtitleYOffset * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
                     // Preview Action
                     Button(
                         onClick = {
                             val bmp = Bitmap.createBitmap(720, 480, Bitmap.Config.ARGB_8888)
+                            val subObj = VideoSubtitler.Subtitle(
+                                startTime = 0L,
+                                endTime = 2000L,
+                                text = subtitleText.text
+                            )
                             previewBitmap = VideoSubtitler.drawSubtitleOnBitmap(
                                 bitmap = bmp,
                                 subtitle = subtitleText.text,
                                 fontStyle = selectedFontStylePreset,
                                 fontSize = fontSize,
-                                fontColor = android.graphics.Color.rgb(
-                                    (selectedFontColor.red * 255).toInt(),
-                                    (selectedFontColor.green * 255).toInt(),
-                                    (selectedFontColor.blue * 255).toInt()
-                                )
+                                fontColor = selectedFontColor.toArgb(),
+                                x = 0f,
+                                y = 480f * subtitleYOffset,
+                                subtitleObj = subObj,
+                                currentPositionMs = 1000L
                             )
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = ObsidianBlack),

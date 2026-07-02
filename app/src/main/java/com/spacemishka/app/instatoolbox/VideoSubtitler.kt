@@ -398,12 +398,18 @@ object VideoSubtitler {
         fontSize: Float = 48f,
         fontColor: Int = Color.WHITE,
         x: Float = 40f,
-        y: Float = 80f
+        y: Float = 80f,
+        subtitleObj: Subtitle? = null,
+        currentPositionMs: Long? = null
     ) {
         val canvas = Canvas(bitmap)
+        val isCreatorStyle = fontStyle == "Submagic Pro" || fontStyle == "TikTok Viral" || fontStyle == "Caption Glow"
+        val rawText = if (isCreatorStyle) subtitle.uppercase(java.util.Locale.US) else subtitle
+        
         val paintColor = when (fontStyle) {
             "Neon Glow" -> Color.rgb(0, 240, 255)
             "Retro Sunset" -> Color.rgb(255, 65, 108)
+            "TikTok Viral" -> Color.rgb(255, 255, 0) // Yellow text base
             else -> fontColor
         }
         val paint = android.text.TextPaint().apply {
@@ -412,6 +418,7 @@ object VideoSubtitler {
             isAntiAlias = true
         }
 
+        // Configure font styles and weights
         when (fontStyle) {
             "Neon Glow" -> {
                 paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
@@ -420,6 +427,13 @@ object VideoSubtitler {
             "Retro Sunset" -> {
                 paint.typeface = Typeface.MONOSPACE
                 paint.setShadowLayer(4f, 2f, 2f, Color.BLACK)
+            }
+            "Caption Glow" -> {
+                paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                paint.setShadowLayer(16f, 0f, 0f, Color.rgb(255, 0, 127)) // Hot Pink Glow
+            }
+            "Submagic Pro", "TikTok Viral" -> {
+                paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
             }
             "Bold Impact" -> {
                 paint.typeface = Typeface.DEFAULT_BOLD
@@ -430,13 +444,62 @@ object VideoSubtitler {
             }
         }
 
+        // Compute active word-by-word highlighting
+        var spannableText: CharSequence = rawText
+        if (subtitleObj != null && currentPositionMs != null && isCreatorStyle) {
+            val upperText = subtitleObj.text.uppercase(java.util.Locale.US)
+            val words = upperText.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+            if (words.isNotEmpty()) {
+                val totalDuration = subtitleObj.endTime - subtitleObj.startTime
+                val elapsed = currentPositionMs - subtitleObj.startTime
+                val wordDuration = if (totalDuration > 0) totalDuration.toFloat() / words.size else 0f
+                val activeIndex = if (wordDuration > 0f) {
+                    (elapsed / wordDuration).toInt().coerceIn(0, words.size - 1)
+                } else {
+                    0
+                }
+
+                val ssb = android.text.SpannableStringBuilder()
+                words.forEachIndexed { idx, word ->
+                    val wordStart = ssb.length
+                    ssb.append(word)
+                    val wordEnd = ssb.length
+
+                    if (idx == activeIndex) {
+                        val highlightColor = when (fontStyle) {
+                            "Submagic Pro" -> Color.rgb(0, 255, 0) // Neon Green
+                            "TikTok Viral" -> Color.rgb(255, 0, 127) // Hot Pink
+                            "Caption Glow" -> Color.rgb(255, 215, 0) // Gold
+                            else -> Color.YELLOW
+                        }
+                        ssb.setSpan(
+                            android.text.style.ForegroundColorSpan(highlightColor),
+                            wordStart,
+                            wordEnd,
+                            android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                        ssb.setSpan(
+                            android.text.style.StyleSpan(Typeface.BOLD),
+                            wordStart,
+                            wordEnd,
+                            android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                    if (idx < words.size - 1) {
+                        ssb.append(" ")
+                    }
+                }
+                spannableText = ssb
+            }
+        }
+
         val videoWidth = bitmap.width
         val maxWidth = (videoWidth * 0.85f).toInt()
 
         val builder = android.text.StaticLayout.Builder.obtain(
-            subtitle,
+            spannableText,
             0,
-            subtitle.length,
+            spannableText.length,
             paint,
             maxWidth
         )
@@ -466,7 +529,27 @@ object VideoSubtitler {
 
         canvas.save()
         canvas.translate(xPos, yPos)
-        staticLayout.draw(canvas)
+
+        if (fontStyle == "Submagic Pro" || fontStyle == "TikTok Viral") {
+            // Draw Outline text stroke first
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = fontSize / 6f
+            paint.color = Color.BLACK
+            val oldShadow = paint.shadowLayerRadius
+            paint.clearShadowLayer()
+
+            staticLayout.draw(canvas)
+
+            // Draw filled text on top
+            paint.style = Paint.Style.FILL
+            paint.color = paintColor
+            if (oldShadow > 0) {
+                paint.setShadowLayer(oldShadow, 0f, 0f, paintColor)
+            }
+            staticLayout.draw(canvas)
+        } else {
+            staticLayout.draw(canvas)
+        }
         canvas.restore()
     }
 
@@ -480,10 +563,22 @@ object VideoSubtitler {
         fontSize: Float = 48f,
         fontColor: Int = Color.WHITE,
         x: Float = 40f,
-        y: Float = 80f
+        y: Float = 80f,
+        subtitleObj: Subtitle? = null,
+        currentPositionMs: Long? = null
     ): Bitmap {
         val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        drawSubtitleOnMutableBitmap(mutableBitmap, subtitle, fontStyle, fontSize, fontColor, x, y)
+        drawSubtitleOnMutableBitmap(
+            mutableBitmap,
+            subtitle,
+            fontStyle,
+            fontSize,
+            fontColor,
+            x,
+            y,
+            subtitleObj,
+            currentPositionMs
+        )
         return mutableBitmap
     }
 
@@ -498,6 +593,7 @@ object VideoSubtitler {
         fontStyle: String,
         fontSize: Float,
         fontColor: Int,
+        yOffset: Float = 0.85f,
         outputUri: Uri
     ): Boolean = withContext(Dispatchers.IO) {
         var retriever: android.media.MediaMetadataRetriever? = null
@@ -548,7 +644,7 @@ object VideoSubtitler {
                     val text = sub?.text ?: ""
 
                     if (text.isNotBlank()) {
-                        val yPos = videoHeight * 0.85f
+                        val yPos = videoHeight * yOffset
                         drawSubtitleOnMutableBitmap(
                             bitmap = bmp,
                             subtitle = text,
@@ -556,7 +652,9 @@ object VideoSubtitler {
                             fontSize = fontSize,
                             fontColor = fontColor,
                             x = 0f,
-                            y = yPos
+                            y = yPos,
+                            subtitleObj = sub,
+                            currentPositionMs = timeMs
                         )
                     }
                     return bmp
