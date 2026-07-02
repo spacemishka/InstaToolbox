@@ -17,7 +17,7 @@ Fit full landscape or portrait photos inside square layouts without cropping.
 Transcribe speech and burn trendy, synchronized subtitles directly onto your video clips.
 * **ML Kit On-Device Recognition**: Fast, private local audio transcription supporting both *Standard (Basic)* and *AI-Enhanced (GenAI)* models.
 * **Manual Model Syncing**: Force-sync Play Services speech models manually directly from settings, featuring live percentage progress.
-* **Catchy Creator Presets**: 
+* **Catchy Creator Presets (currently not wokring properly)**: 
   - **"Submagic Pro"**: Slanted, bold uppercase white text with thick black outline, active spoken word highlighted in **neon green**.
   - **"TikTok Viral"**: Slanted yellow text with thick black outline, active spoken word highlighted in **hot pink**.
   - **"Caption Glow"**: Neon hot-pink shadow glow with the active spoken word highlighted in **gold**.
