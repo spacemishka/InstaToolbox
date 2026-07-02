@@ -629,38 +629,40 @@ fun VideoSubtitleScreen(
                             }
                         } catch (e: Exception) {
                             android.util.Log.e("VideoSubtitleScreen", "Transcription failed", e)
-                            val isGenAiIssue = useAdvancedRecognition && (
-                                e.message?.contains("AICORE", ignoreCase = true) == true ||
-                                e.message?.contains("GenAiException", ignoreCase = true) == true ||
-                                e.message?.contains("DOWNLOAD_ERROR", ignoreCase = true) == true ||
-                                e.message?.contains("internal error", ignoreCase = true) == true
-                            )
-                            if (isGenAiIssue) {
-                                withContext(Dispatchers.Main) {
-                                    android.widget.Toast.makeText(
-                                        context, 
-                                        "AI-Enhanced mode not supported on this device. Falling back to Standard mode.", 
-                                        android.widget.Toast.LENGTH_LONG
-                                    ).show()
-                                    useAdvancedRecognition = false
-                                }
-                                try {
-                                    subtitles = VideoSubtitler.generateSubtitlesFromVideo(
-                                        context = context,
-                                        videoPath = videoUri.toString(),
-                                        locale = selectedLanguage.second,
-                                        useAdvanced = false
-                                    )
-                                    if (subtitles.isNotEmpty()) {
-                                        subtitleText = TextFieldValue(subtitles.first().text)
-                                        selectedSubtitleIndex = 0
-                                    }
-                                } catch (fallbackEx: Exception) {
-                                    exportStatus = "Transcription failed: ${fallbackEx.message}"
-                                }
-                            } else {
-                                exportStatus = "Transcription failed: ${e.message}"
-                            }
+                             val isGenAiIssue = useAdvancedRecognition && (
+                                 e.message?.contains("AICORE", ignoreCase = true) == true ||
+                                 e.message?.contains("GenAiException", ignoreCase = true) == true ||
+                                 e.message?.contains("DOWNLOAD_ERROR", ignoreCase = true) == true ||
+                                 e.message?.contains("MODEL_UNAVAILABLE", ignoreCase = true) == true ||
+                                 e.message?.contains("internal error", ignoreCase = true) == true ||
+                                 e.message?.contains("closed", ignoreCase = true) == true
+                             )
+                             if (isGenAiIssue) {
+                                 withContext(Dispatchers.Main) {
+                                     android.widget.Toast.makeText(
+                                         context, 
+                                         "GenAI unavailable (unsupported language/region, or AICore disabled in Developer Options). Falling back to Standard mode.", 
+                                         android.widget.Toast.LENGTH_LONG
+                                     ).show()
+                                     useAdvancedRecognition = false
+                                 }
+                                 try {
+                                     subtitles = VideoSubtitler.generateSubtitlesFromVideo(
+                                         context = context,
+                                         videoPath = videoUri.toString(),
+                                         locale = selectedLanguage.second,
+                                         useAdvanced = false
+                                     )
+                                     if (subtitles.isNotEmpty()) {
+                                         subtitleText = TextFieldValue(subtitles.first().text)
+                                         selectedSubtitleIndex = 0
+                                     }
+                                 } catch (fallbackEx: Exception) {
+                                     exportStatus = "Transcription failed: ${fallbackEx.message}"
+                                 }
+                             } else {
+                                 exportStatus = "Transcription failed: ${e.message}"
+                             }
                         } finally {
                             isGenerating = false
                         }
