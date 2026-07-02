@@ -17,20 +17,35 @@ Fit full landscape or portrait photos inside square layouts without cropping.
 Transcribe speech and burn trendy, synchronized subtitles directly onto your video clips.
 * **ML Kit On-Device Recognition**: Fast, private local audio transcription supporting both *Standard (Basic)* and *AI-Enhanced (GenAI)* models.
 * **Manual Model Syncing**: Force-sync Play Services speech models manually directly from settings, featuring live percentage progress.
-* **Catchy Creator Presets (currently not wokring properly)**: 
+* **Catchy Creator Presets**: 
   - **"Submagic Pro"**: Slanted, bold uppercase white text with thick black outline, active spoken word highlighted in **neon green**.
   - **"TikTok Viral"**: Slanted yellow text with thick black outline, active spoken word highlighted in **hot pink**.
   - **"Caption Glow"**: Neon hot-pink shadow glow with the active spoken word highlighted in **gold**.
-* **Dynamic Word-by-Word Highlighting**: Automatically tracks elapsed playhead time and highlights the active word frame-by-frame on both player preview and exported files.
+* **Dynamic Word-by-Word Highlighting**: Automatically tracks elapsed playhead time and highlights the active word frame-by-word on both player preview dialog and exported files.
 * **Layout & Timeline Editors**:
   - Adjust vertical Y-position (`0.1` to `0.9` bias) and Font Size dynamically.
   - Tweak timings manually with `+0.1s`/`-0.1s` buttons.
   - Insert new timing blocks manually (`+ Add Block`) or prune segments (`Delete Caption Block`).
+* **Immersive Full-Screen Preview**: Immersive system Dialog preview window with synchronized captions and play/pause controls to review before export.
 
 ### 🎞️ Swipeable Photo Carousel Slicer
 Slice panorama pictures into seamless carousel grids.
 * Slices horizontal images into 2 to 5 square segment chunks.
 * Interactive carousel previews with indexed indicator badges (`[Slide 1]`, `[Slide 2]`).
+
+### 🧩 9-Grid Profile Slicer
+Slice a single photo into a 3x3 layout grid of 9 square segments to form a large profile puzzle.
+* **Slicing Modes**:
+  - *Center Crop*: Crops the largest center square of the image and slices it.
+  - *Fit with Padding*: Fits the entire image into a square frame with black/white padding margins. Supports adjusting margins via padding chips (0%, 2.5%, 5%, 10%, 15%).
+* **Visual Slicing Sequence**: Clear reverse-sequence numbered badges (e.g. `#1 (Upload 1st)` to `#9 (Upload 9th)`) to ensure perfect layout reconstruction when posting to your feed.
+* **High-Res Saving**: Slices and exports high-definition crops sequentially on a background worker thread (`Dispatchers.IO`) directly into `Pictures/InstaToolbox`.
+
+### 📤 System Share Sheet Routing ("Send to")
+Share photos and videos directly from other apps (such as Google Photos or your gallery app) straight into InstaToolbox.
+* **Launch Reuse**: Reuses active task instance seamlessly (`singleTop` launchMode) to prevent stack clutter.
+* **Video Handling**: Shared video formats bypass the dashboard and load directly inside the Video Auto-Subtitler.
+* **Image Handling**: Shared image formats display a modern selection dialog asking which editor (No-Crop, Swipeable, or 9-Grid) to launch.
 
 ---
 
